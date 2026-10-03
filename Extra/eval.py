@@ -23,7 +23,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import date, datetime
 from pathlib import Path
 
-import classify
+import Extra.classify as classify
 import core
 import seed
 
