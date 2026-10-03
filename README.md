@@ -1,1 +1,1 @@
-# GlobalHackathon2026
+# Hack-Nation Global AI Hackathon
