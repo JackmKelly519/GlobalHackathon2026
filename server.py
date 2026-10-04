@@ -24,6 +24,7 @@ Commands:
     python server.py send                       # message all patients who missed
     python server.py send --id P99999           # message one patient (any date)
     python server.py chat --id P99999           # test the bot in the terminal, no SMS
+    python server.py reset                      # clear conversations between demo runs
 
 Config (environment variables):
     GATEWAY_URL   e.g. http://192.168.43.1:8080   (shown in the app)
@@ -172,7 +173,17 @@ def save_convos(convos: dict) -> None:
     os.replace(tmp, CONVOS_JSON)
 
 
+def clean_number(phone: str) -> str:
+    """Normalize to +<digits> so the gateway never sees spaces, dashes,
+    quotes or invisible characters copied in from spreadsheets."""
+    d = digits(phone).lstrip("0")   # country codes never start with 0 ("00" is a dialing prefix)
+    if len(d) == 10:                # bare US number like 7865551234
+        d = "1" + d
+    return "+" + d
+
+
 def gateway_send(phone: str, text: str, dry_run: bool = False) -> bool:
+    phone = clean_number(phone)
     if dry_run:
         return True
     try:
@@ -438,6 +449,18 @@ def cmd_chat(pid: str) -> None:
             break
 
 
+def cmd_reset() -> None:
+    """Clear all conversations and bot-filled columns (keeps patients and attended)."""
+    with csv_lock:
+        rows, fields = load_patients()
+        for r in rows:
+            r["miss_reason"] = r["wants_reschedule"] = r["last_reply"] = ""
+            r["needs_followup"] = r["opted_out"] = "False"
+        save_patients(rows, fields)
+        save_convos({})
+    print(f"Reset {len(rows)} patients and cleared {CONVOS_JSON}.")
+
+
 def cmd_register(url: str) -> None:
     r = requests.post(f"{GATEWAY_URL}/webhooks", auth=(GATEWAY_USER, GATEWAY_PASS),
                       json={"id": "clinic-replies", "url": url, "event": "sms:received"},
@@ -452,6 +475,7 @@ def main() -> None:
     sd = sub.add_parser("send"); sd.add_argument("--id")
     ch = sub.add_parser("chat"); ch.add_argument("--id", required=True)
     rg = sub.add_parser("register"); rg.add_argument("url")
+    sub.add_parser("reset")
     args = ap.parse_args()
 
     if not os.path.exists(PATIENTS_CSV):
@@ -465,6 +489,8 @@ def main() -> None:
         cmd_chat(args.id)
     elif args.cmd == "register":
         cmd_register(args.url)
+    elif args.cmd == "reset":
+        cmd_reset()
 
 
 if __name__ == "__main__":
